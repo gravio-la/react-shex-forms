@@ -1,5 +1,5 @@
 {
-  "name": "graviola-datagrid",
+  "name": "@gravio.la/react-shex-forms",
   "version": "0.1.0",
   "keywords": [],
   "description": "",
@@ -9,13 +9,13 @@
   "files": [
     "dist"
   ],
-  "author": "Winzlieb <winzlieb@c3d2.de>",
+  "author": "Sebastian Tilsch <graviola@sebastian-tilsch.de>",
   "repository": {
     "url": "",
     "type": "git"
   },
   "homepage": "",
-  "license": "MIT",
+  "license": "GPLv3",
   "private": true,
   "scripts": {
     "start": "rollup -c rollup.config.js -w",
@@ -28,7 +28,9 @@
     "test:ci": "cross-env CI=1 jest",
     "predeploy": "cd example && yarn install && yarn run build",
     "deploy": "gh-pages -d example/build",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "storybook": "start-storybook -p 6006 -s stories",
+    "build-storybook": "build-storybook  -o ./docs/storybook -s stories"
   },
   "engines": {
     "node": ">=10",
@@ -39,7 +41,13 @@
     "react-dom": ">=17"
   },
   "devDependencies": {
-    "@commitlint/cli": "^13.2.0",
+    "@storybook/addon-actions": "^6.5.10",
+    "@storybook/addon-docs": "^6.5.10",
+    "@storybook/addon-essentials": "^6.5.10",
+    "@storybook/addon-interactions": "^6.5.10",
+    "@storybook/addon-links": "^6.5.10",
+    "@storybook/react": "^6.5.10",
+    "@storybook/testing-library": "^0.0.13",
     "@testing-library/jest-dom": "^5.14.1",
     "@testing-library/react": "^12.1.2",
     "@types/jest": "^27.0.2",
@@ -80,17 +88,15 @@
     "rollup-plugin-typescript2": "^0.30.0",
     "shelljs": "^0.8.5",
     "ts-jest": "^27.0.5",
+    "tslib": "^2.4.0",
     "typedoc": "^0.22.5",
     "typescript": "^4.4.3"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
-      "./node_modules/.bin/prettier --write",
-      "./node_modules/.bin/eslint"
+      "./node_modules/.bin/eslint --fix"
     ]
   },
   "dependencies": {
-    "@inovua/reactdatagrid-community": "^4.21.0",
-    "moment": "^2.29.4"
   }
 }
