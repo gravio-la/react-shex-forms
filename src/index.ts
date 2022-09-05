@@ -1,5 +1,5 @@
-import Greeting from './components/Greeting'
+import ShexForm from './components/ShexForm'
 
 export {
-  Greeting
+  ShexForm
 }
