@@ -43,7 +43,7 @@ BASE <${baseURI}>
       vc:hasAddress @<#vcard_street-address> * ;
 
   $<#UserProfile-TC-organization-name-1>
-      vc:organization-name xsd:string ? ;
+      vc:organization-name xsd:string * ;
 
       vc:someInt xsd:integer ;
       vc:otherInt xsd:integer OR xsd:string ;
@@ -86,7 +86,7 @@ ABSTRACT <#PersonShape> {
   foaf:mbox IRI
 }
 
-<#UserShape> EXTENDS <#PersonShape> {
+<#UserShape> EXTENDS @<#PersonShape> {
   foaf:representative @<#EmployeeShape>
 }
 
@@ -95,7 +95,7 @@ ABSTRACT <#RepShape> {
 }
 
 <#EmployeeShape>
-  EXTENDS <#PersonShape> & <#RepShape> {
+  EXTENDS @<#PersonShape> EXTENDS @<#RepShape> {
 }
 `
 const Template: ComponentStory<typeof ShexForm> = ( args ) =>
