@@ -41,6 +41,7 @@
     "react-dom": ">=17"
   },
   "devDependencies": {
+    "@rdfjs/types": "^1.1.0",
     "@storybook/addon-actions": "^6.5.10",
     "@storybook/addon-docs": "^6.5.10",
     "@storybook/addon-essentials": "^6.5.10",
