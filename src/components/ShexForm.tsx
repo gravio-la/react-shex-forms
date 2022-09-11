@@ -5,7 +5,15 @@ import * as xsd from '@ontologies/xsd'
 import shexCore from '@shexjs/core'
 import shexParser from '@shexjs/parser'
 import React, {Fragment, useCallback, useEffect, useState} from 'react'
-import {Button, Dropdown, Form, FormDropdown, StrictFormDropdownProps, StrictFormFieldProps} from 'semantic-ui-react'
+import {
+  Button,
+  Dropdown,
+  Form,
+  FormDropdown,
+  Icon, Segment,
+  StrictFormDropdownProps,
+  StrictFormFieldProps
+} from 'semantic-ui-react'
 import {
   EachOf,
   IRIREF,
@@ -222,7 +230,6 @@ function ShexForm( {shexDocument, startShapeURI, baseURI, rootURI}: ShexFormProp
       const [, ...path] = context.path
       try {
         const newDoc = removeFromRDFDocument( rdfDocument, path, change )
-        console.log( {newDoc} )
         setRdfDocument( newDoc )
       } catch ( e ) {
         console.error( e )
@@ -234,7 +241,6 @@ function ShexForm( {shexDocument, startShapeURI, baseURI, rootURI}: ShexFormProp
     ( context , isIRI ) => {
       const [, ...path] = context.path
       const newDoc = updateRDFDocument( rdfDocument, path, null, isIRI )
-      console.log( {newDoc} )
       setRdfDocument( newDoc )
     },
     [rdfDocument, setRdfDocument] )
@@ -309,20 +315,31 @@ type ShapeDeclProps = {
 
 type TripleConstraintShapeExprProps = {
   context: Context,
-  tripleConstraint: TripleConstraint
+  tripleConstraint: TripleConstraint,
+  label?: string,
+  zeroOrOne?: boolean
 }
 
 type IRIChooserProps = {
   baseURI: string
   onChange: ( data: string ) => void
   value?: string
+  onRemove: () => void
+  allowDelete?: boolean
 } & StrictFormFieldProps
 
-const IRIChooser = ( {baseURI, value, onChange, ...props}: IRIChooserProps ) => {
+const IRIChooser = ( {baseURI, value, onChange, onRemove, allowDelete, ...props}: IRIChooserProps ) => {
+  const action = allowDelete ? {
+    icon: 'close',
+    disabled: typeof value === 'undefined' ||  value === null,
+    onClick: () => onRemove()
+  } : undefined
   return <Form.Input
     {...props}
     type="text"
     value={value || ''}
+    action={action}
+    actionPosition='left'
     onChange={e => onChange( e.target.value )}
   />
 
@@ -331,13 +348,23 @@ const IRIChooser = ( {baseURI, value, onChange, ...props}: IRIChooserProps ) => 
 const PrimitiveForm = ( {
   datatype,
   onChange,
+  onRemove,
   value,
+  allowDelete,
   ...props
-}: { datatype: string, onChange: ( data: any ) => void, value: any } & StrictFormFieldProps ) => {
+}: {allowDelete?: boolean, datatype: string, onChange: ( data: any ) => void, onRemove: () => void, value: any } & StrictFormFieldProps ) => {
+  const action = allowDelete ? {
+    icon: 'close',
+    disabled: typeof value === 'undefined' ||  value === null,
+    onClick: () => onRemove()
+  } : undefined
+
   switch ( datatype ) {
   case xsd.string.value:
     return <Form.Input
       {...props}
+      action={action}
+      actionPosition='left'
       type="text"
       onChange={e => onChange( {'@value': e.target.value } )}
       value={value || ''}
@@ -345,6 +372,8 @@ const PrimitiveForm = ( {
   case xsd.integer.value:
     return <Form.Input
       {...props}
+      action={action}
+      actionPosition='left'
       onChange={e => onChange( { '@value': e.target.value } )}
       value={value || ''}
       type="number"
@@ -353,6 +382,7 @@ const PrimitiveForm = ( {
     return <Form.Checkbox
       {...props}
       type="checkbox"
+      indeterminate={value !== true || value !== false}
       onChange={( _e, data ) => onChange( data.checked )}
       checked={value || false}
     />
@@ -380,8 +410,13 @@ const ValuesDropdown = ( {values, ...props}: { values: valueSetValue[] } & Stric
   return <Form.Dropdown {...props} options={options}/>
 }
 
+const validator = {
+  required: ( value: any ) => value === undefined || value === null ? 'required form filed' : undefined,
+  matchesPattern: ( pattern: string,value: any ) => typeof value === 'string' ? ( new RegExp( pattern ).test( value ) ? undefined : `the input must follow the pattern ${pattern}` ) : undefined
+}
+
 const tripleConstraintShapeExpr = {
-  Shape: ( {context, shape, tripleConstraint}: TripleConstraintShapeExprProps & { shape: Shape } ) => {
+  Shape: ( {context, shape, tripleConstraint, label, zeroOrOne}: TripleConstraintShapeExprProps & { shape: Shape } ) => {
     return shape.expression
       ? <Container shapeName='Shape' style={{border: 'solid 1px black'}}>
         <TripleExprSwitch context={context} expr={shape.expression}/>
@@ -400,7 +435,7 @@ const tripleConstraintShapeExpr = {
   ShapeNot: ( {context, shape}: TripleConstraintShapeExprProps & { shape: ShapeNot } ) => {
     return <Container shapeName='ShapeNot' notImplemented/>
   },
-  NodeConstraint: ( {context, shape, tripleConstraint}: TripleConstraintShapeExprProps & { shape: NodeConstraint } ) => {
+  NodeConstraint: ( {context, shape, tripleConstraint, zeroOrOne}: TripleConstraintShapeExprProps & { shape: NodeConstraint } ) => {
     const label = iri2Label( tripleConstraint.predicate )
     const data = useData( context )
     const handleChange = useCallback(
@@ -408,13 +443,24 @@ const tripleConstraintShapeExpr = {
         context.events.onChange( context, {value: _data, isIRI} )
       },
       [context] )
+    const handleRemove = useCallback(
+      () => {
+        context.events.onRemove( context, {predicate: tripleConstraint.predicate} )
+      },
+      [context] )
 
     if ( shape.nodeKind === 'iri' ) {
+      const error = filterUndefOrNull( [
+        !zeroOrOne ? validator.required( data ) : undefined,
+        ( shape.pattern ? validator.matchesPattern( shape.pattern, data ) : undefined )] )
       return <Container shapeName='triple NodeConstraint'>
         <IRIChooser
           onChange={data => handleChange( data, true )}
+          onRemove={() => handleRemove()}
+          allowDelete={zeroOrOne}
           value={data}
           label={label}
+          error={error.length > 0 ? error : undefined}
           baseURI={context.baseURI}/>
       </Container>
     } else {
@@ -423,8 +469,10 @@ const tripleConstraintShapeExpr = {
           <PrimitiveForm
             datatype={shape.datatype}
             label={label}
+            allowDelete={zeroOrOne}
             value={data?.['@value'] || null}
-            onChange={data => handleChange( data, false )}/>}
+            onChange={data => handleChange( data, false )}
+            onRemove={() => handleRemove()}/>}
         {shape.values &&
           <ValuesDropdown values={shape.values} label={label}/>}
       </Container>
@@ -510,7 +558,7 @@ const triplExpr = {
 
     return <Container shapeName='Triple Constraint'>
       {valueExpr &&
-        <TripleConstraintShapeExprContainer context={context} tripleConstraint={expr} valueExpr={valueExpr}/>}
+        <TripleConstraintShapeExprContainer context={context} tripleConstraint={expr} valueExpr={valueExpr} />}
     </Container>
   }
 }
@@ -520,30 +568,38 @@ type MultiPropertyContainerProps = {
   max: number
   data?: any[]
   valueExpr: shapeExpr
+  label?: string
 } & TripleConstraintShapeExprProps
 
 
 const MultiPropertyContainer = ( props: MultiPropertyContainerProps ) => {
-  const {min, max, tripleConstraint, valueExpr, context, data} = props
+  const {min, max, tripleConstraint, valueExpr, context, data, label} = props
   const count = data?.length || 0
 
   //TODO: how do we no if its an IRI? important!!!!
-  const isIRI = false
+  const isIRI = valueExpr.type === 'NodeConstraint' && valueExpr.nodeKind === 'iri'
 
   return <div>
-    <Button circular size='tiny' icon='add' disabled={max !== -1 && count >= max}
+    <Button
+      labelPosition='left'
+      content={label}
+      size='tiny'
+      icon='add'
+      disabled={max !== -1 && count >= max}
       onClick={() => context.events.onAddEmptyElement( updatePath( context, count ), isIRI )}/>
-    {data?.map(( object, index ) => {
-      const newContext = updatePath( context, index )
-      const _key = makeKey( newContext.path ) //(( data as any ).__key || '' )
-      return <div key={_key} style={{display: 'flex'}}>
-        <Button circular icon='remove' size='tiny'
-          onClick={() => context.events.onRemove( newContext, {predicate: tripleConstraint.predicate, object} )}/>
-        <TripleConstraintShapeExprSwitch context={newContext}
-          tripleConstraint={tripleConstraint} valueExpr={valueExpr}/>
-      </div>
-    }
-    )}
+    <Segment.Group>
+      {data?.map(( object, index ) => {
+        const newContext = updatePath( context, index )
+        const _key = makeKey( newContext.path ) //(( data as any ).__key || '' )
+        return <Segment key={_key} style={{display: 'flex'}}>
+          <Icon link name='close' size='tiny'
+            onClick={() => context.events.onRemove( newContext, {predicate: tripleConstraint.predicate, object} )}/>
+          <TripleConstraintShapeExprSwitch context={newContext}
+            tripleConstraint={tripleConstraint} valueExpr={valueExpr}/>
+        </Segment>
+      }
+      )}
+    </Segment.Group>
   </div>
 }
 
@@ -554,28 +610,31 @@ const TripleConstraintShapeExprContainer = ( {
 }: TripleConstraintShapeExprProps & { valueExpr: shapeExpr } ) => {
   const {min = 1, max = 1} = tripleConstraint
   const exactlyOne = min === 1 && max === 1
+  const zeroOrOne = min === 0 && max === 1
   const predicateContext = updatePath( context, tripleConstraint.predicate )
   const firstElementContext = updatePath( predicateContext, 0 )
   const data = useData( predicateContext )
-  //TODO: min, max
-  //console.log(context.rdfDocument.)
 
   const label = iri2Label( tripleConstraint.predicate )
 
-  return <div>
-    <span className={'triple_form_label'}>{label}</span>{
-      exactlyOne
-        ? <TripleConstraintShapeExprSwitch context={firstElementContext} tripleConstraint={tripleConstraint}
-          valueExpr={valueExpr}/>
-        : <MultiPropertyContainer
-          min={min}
-          max={max}
-          data={data as any[]}
-          tripleConstraint={tripleConstraint}
-          valueExpr={valueExpr}
-          context={predicateContext}
-        />
-    }</div>
+  return <div>{
+    exactlyOne || zeroOrOne
+      ? <TripleConstraintShapeExprSwitch
+        label={label}
+        zeroOrOne={zeroOrOne}
+        context={firstElementContext}
+        tripleConstraint={tripleConstraint}
+        valueExpr={valueExpr}/>
+      : <MultiPropertyContainer
+        label={label}
+        min={min}
+        max={max}
+        data={data as any[]}
+        tripleConstraint={tripleConstraint}
+        valueExpr={valueExpr}
+        context={predicateContext}
+      />
+  }</div>
 }
 
 const TripleExprSwitch = ( {context, expr}: triplExprProps & { expr: tripleExprOrRef } ) => {
@@ -591,24 +650,20 @@ const TripleExprSwitch = ( {context, expr}: triplExprProps & { expr: tripleExprO
   }
 }
 
-const TripleConstraintShapeExprSwitch = ( {
-  context,
-  tripleConstraint,
-  valueExpr
-}: TripleConstraintShapeExprProps & { valueExpr: shapeExpr } ) => {
+const TripleConstraintShapeExprSwitch = ( { valueExpr, ...props } : TripleConstraintShapeExprProps & { valueExpr: shapeExpr } ) => {
   switch ( valueExpr.type ) {
   case 'Shape':
-    return tripleConstraintShapeExpr.Shape( {context, tripleConstraint, shape: valueExpr} )
+    return tripleConstraintShapeExpr.Shape( {...props, shape: valueExpr} )
   case 'ShapeAnd':
-    return tripleConstraintShapeExpr.ShapeAnd( {context, tripleConstraint, shape: valueExpr} )
+    return tripleConstraintShapeExpr.ShapeAnd( {...props, shape: valueExpr} )
   case 'ShapeOr':
-    return tripleConstraintShapeExpr.ShapeOr( {context, tripleConstraint, shape: valueExpr} )
+    return tripleConstraintShapeExpr.ShapeOr( {...props ,shape: valueExpr} )
   case 'ShapeNot':
-    return tripleConstraintShapeExpr.ShapeNot( {context, tripleConstraint, shape: valueExpr} )
+    return tripleConstraintShapeExpr.ShapeNot( {...props, shape: valueExpr} )
   case 'ShapeExternal':
-    return tripleConstraintShapeExpr.ShapeExternal( {context, tripleConstraint, shape: valueExpr} )
+    return tripleConstraintShapeExpr.ShapeExternal( {...props, shape: valueExpr} )
   case 'NodeConstraint':
-    return tripleConstraintShapeExpr.NodeConstraint( {context, tripleConstraint, shape: valueExpr} )
+    return tripleConstraintShapeExpr.NodeConstraint( {...props, shape: valueExpr} )
   }
 }
 
