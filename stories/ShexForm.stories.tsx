@@ -1,5 +1,6 @@
 import {ComponentMeta, ComponentStory} from '@storybook/react'
 import * as React from 'react'
+import {Container} from 'semantic-ui-react'
 
 import { ShexForm } from '../src'
 
@@ -98,7 +99,8 @@ ABSTRACT <#RepShape> {
   EXTENDS @<#PersonShape> EXTENDS @<#RepShape> {
 }
 `
-const Template: ComponentStory<typeof ShexForm> = ( args ) =>
+const Template: ComponentStory<typeof ShexForm> = ( args ) => <Container>
   <ShexForm {...args} shexDocument={shexSchema} baseURI={baseURI} startShapeURI='http://a.example/schema1#UserProfile' rootURI={'http://example.org/me'}/>
+</Container>
 
 export const BasicForm = Template.bind( {} )
