@@ -1,5 +1,3 @@
-import './main.css'
-
 import * as xsd from '@ontologies/xsd'
 // @ts-ignore
 import shexCore from '@shexjs/core'
@@ -7,10 +5,10 @@ import shexParser from '@shexjs/parser'
 import React, {Fragment, useCallback, useEffect, useState} from 'react'
 import {
   Button,
-  Dropdown,
+  Dropdown, DropdownProps,
   Form,
   FormDropdown,
-  Icon, Segment,
+  Icon, Input, Label, Segment,
   StrictFormDropdownProps,
   StrictFormFieldProps
 } from 'semantic-ui-react'
@@ -92,17 +90,6 @@ const getSubTreeByPath: ( doc: any, path: PathComponent[] ) => any = ( doc: any,
     return getSubTreeByPath( doc_, restPath )
   }
 }
-
-const alterArrayKey = ( key: string | undefined, arr: any[] ) => {
-  let newKey = uuidv4()
-  while ( key === newKey ) {
-    newKey = uuidv4()
-  }
-  // @ts-ignore
-  arr.__key = newKey
-  return arr
-}
-
 const removeFromRDFDocument: ( doc: any, path: PathComponent[], value: RemoveChangePayload ) => ( any ) = ( doc, path, value ) => {
 
   if ( path.length === 0 ) {
@@ -328,20 +315,73 @@ type IRIChooserProps = {
   allowDelete?: boolean
 } & StrictFormFieldProps
 
-const IRIChooser = ( {baseURI, value, onChange, onRemove, allowDelete, ...props}: IRIChooserProps ) => {
+type Prefixes = {
+  [k:string]: string
+}
+
+const prefixes: Prefixes = {
+  'tel': 'tel:',
+  'schema': 'http://schema.org/',
+  'foaf': 'http://xmlns.com/foaf/0.1/',
+  'vc': 'http://www.w3.org/2006/vcard/ns#',
+  '*': ''
+}
+
+const toValue: ( part: string, prefix: string ) => string = ( part, prefix ) => `${prefix}${part}`
+const fromValue: ( iri: string, prefixes: Prefixes ) => {prefix: { key: string, substitution: string}, part: string} | undefined = ( iri, prefixes ) => {
+  const prefix = Object.entries( prefixes ).find(( [, substitution] ) => substitution.length > 0 && iri.startsWith( substitution ))
+  if( !prefix )
+    return
+  const [key, substitution] = prefix
+  return {
+    prefix: {key, substitution},
+    part: iri.substring( substitution.length ),
+    iri
+  }
+}
+const IRIChooser = ( {baseURI, value, onChange, onRemove, allowDelete, label, error, ...props}: IRIChooserProps ) => {
   const action = allowDelete ? {
     icon: 'close',
     disabled: typeof value === 'undefined' ||  value === null,
     onClick: () => onRemove()
   } : undefined
-  return <Form.Input
-    {...props}
-    type="text"
-    value={value || ''}
-    action={action}
-    actionPosition='left'
-    onChange={e => onChange( e.target.value )}
-  />
+  const { prefix, part } = value && fromValue( value, prefixes ) || {}
+  console.log( {prefix, part, value} )
+
+  const handlePrefixChange = useCallback(
+    ( _e: any, data: DropdownProps ) => {
+      const key= data.value as string
+      const [ prevKey, prevSubstitution ] = Object.entries( prefixes ).find(( [,v] ) => v.length > 0 && value?.startsWith( v )) || []
+
+      console.log( {key, value} )
+      if( key === '*' && value ) {
+        onChange( value )
+      }
+      const substitution = prefixes[key]
+      if( !substitution )
+        return
+      const part = prevSubstitution ? value?.substring( prevSubstitution.length ) : ''
+      onChange( `${substitution}${part}` )
+    },
+    [value, onChange]
+  )
+
+  return <Form.Field error={error ? {content: error, pointing: 'below'}: undefined} {...props}>
+    <label>{label}</label>
+    <Input
+      type="text"
+      label={<Dropdown
+        value={prefix?.key || '*'}
+        onChange={handlePrefixChange}
+        options={Object.keys( prefixes ).map( key => ( {
+          key, text: `${key}:`, value: key
+        } ))} />}
+      value={part || ''}
+      action={action}
+      actionPosition='left'
+      onChange={e => onChange( prefix?.substitution ? toValue( e.target.value, prefix.substitution ) : e.target.value )}
+    />
+  </Form.Field>
 
 }
 
@@ -393,7 +433,7 @@ const PrimitiveForm = ( {
 }
 
 const isObjectLiteral = ( value: valueSetValue ): value is ObjectLiteral => typeof ( value as any ).value === 'string'
-const isIRIREF = ( value: valueSetValue ): value is IRIREF => typeof value === 'string'
+const isIRIRef = ( value: valueSetValue ): value is IRIREF => typeof value === 'string'
 
 const updatePath = ( {
   path,
@@ -403,7 +443,7 @@ const updatePath = ( {
 const ValuesDropdown = ( {values, ...props}: { values: valueSetValue[] } & StrictFormDropdownProps ) => {
   const options = filterUndefOrNull( values.map( v => {
     if ( isObjectLiteral( v )) return {key: v.value, value: v.value, text: v.value}
-    if ( isIRIREF( v )) return {key: v, value: v, text: v}
+    if ( isIRIRef( v )) return {key: v, value: v, text: v}
   } ))
 
   // @ts-ignore
@@ -579,27 +619,33 @@ const MultiPropertyContainer = ( props: MultiPropertyContainerProps ) => {
   //TODO: how do we no if its an IRI? important!!!!
   const isIRI = valueExpr.type === 'NodeConstraint' && valueExpr.nodeKind === 'iri'
 
-  return <div>
-    <Button
-      labelPosition='left'
-      content={label}
-      size='tiny'
-      icon='add'
-      disabled={max !== -1 && count >= max}
-      onClick={() => context.events.onAddEmptyElement( updatePath( context, count ), isIRI )}/>
-    <Segment.Group>
-      {data?.map(( object, index ) => {
+  return <div className='multiple_property_container' style={{margin: '1em 0'}}>
+    {data && data.length > 0 && <Segment.Group>
+      {data.map(( object, index ) => {
         const newContext = updatePath( context, index )
         const _key = makeKey( newContext.path ) //(( data as any ).__key || '' )
         return <Segment key={_key} style={{display: 'flex'}}>
-          <Icon link name='close' size='tiny'
-            onClick={() => context.events.onRemove( newContext, {predicate: tripleConstraint.predicate, object} )}/>
-          <TripleConstraintShapeExprSwitch context={newContext}
-            tripleConstraint={tripleConstraint} valueExpr={valueExpr}/>
+          <Label ribbon style={{position: 'absolute'}}>
+            <>
+              {label}
+              <Icon link name='close' size='tiny'
+                onClick={() => context.events.onRemove( newContext, {predicate: tripleConstraint.predicate, object} )}/>
+            </>
+          </Label>
+          <div  style={{marginTop: '2rem'}}>
+            <TripleConstraintShapeExprSwitch context={newContext}
+              tripleConstraint={tripleConstraint} valueExpr={valueExpr}/>
+          </div>
         </Segment>
       }
       )}
-    </Segment.Group>
+    </Segment.Group>}
+    <Button
+      labelPosition='left'
+      content={label}
+      icon='add'
+      disabled={max !== -1 && count >= max}
+      onClick={() => context.events.onAddEmptyElement( updatePath( context, count ), isIRI )}/>
   </div>
 }
 
