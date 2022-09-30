@@ -16,7 +16,6 @@
   },
   "homepage": "",
   "license": "GPLv3",
-  "private": true,
   "scripts": {
     "start": "rollup -c rollup.config.js -w",
     "build": "tsc && rollup -c rollup.config.js && yarn make:docs",
